@@ -6,7 +6,7 @@ use std::{
 };
 use thiserror::Error;
 
-#[derive(Debug, Error)]
+#[derive(Debug, Error, PartialEq, Eq)]
 enum RepositoryError {
     #[error("Not Found, id is {0}")]
     NotFound(i32),
@@ -96,7 +96,10 @@ impl TodoRepository for TodoRepositoryForMemory {
 
     fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<Todo> {
         let mut store = self.write_store_ref();
-        let mut todo = store.get(&id).context(RepositoryError::NotFound(id))?.clone();
+        let mut todo = store
+            .get(&id)
+            .context(RepositoryError::NotFound(id))?
+            .clone();
         if let Some(text) = payload.text {
             todo.text = text;
         }
@@ -108,12 +111,73 @@ impl TodoRepository for TodoRepositoryForMemory {
     }
 
     fn delete(&self, id: i32) -> anyhow::Result<()> {
-        self.write_store_ref().remove(&id).context(RepositoryError::NotFound(id))?;
+        self.write_store_ref()
+            .remove(&id)
+            .context(RepositoryError::NotFound(id))?;
         Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
-    
+    use crate::repositories::UpdateTodo;
+
+    use super::{CreateTodo, Todo, TodoRepository, TodoRepositoryForMemory};
+
+    #[test]
+    fn todo_crud_scenario() {
+        let repository = TodoRepositoryForMemory::new();
+        let id = 1;
+        let text = "test1".to_string();
+        let completed = false;
+
+        // create
+        let todo = CreateTodo { text: text.clone() };
+        repository.create(todo);
+
+        // find
+        let todo = repository.find(id).unwrap();
+        assert_eq!(
+            Todo {
+                id,
+                text: text.clone(),
+                completed,
+            },
+            todo
+        );
+
+        // update
+        let text = "test2".to_string();
+        let completed = true;
+        assert_eq!(
+            Todo {
+                id,
+                text: text.clone(),
+                completed,
+            },
+            repository
+                .update(
+                    id,
+                    UpdateTodo {
+                        text: Some(text.clone()),
+                        completed: Some(completed),
+                    }
+                )
+                .unwrap()
+        );
+
+        // all
+        assert_eq!(
+            [Todo {
+                id,
+                text: text.clone(),
+                completed,
+            }]
+            .to_vec(),
+            repository.all()
+        );
+
+        // delete
+        assert!(repository.delete(id).is_ok());
+    }
 }
