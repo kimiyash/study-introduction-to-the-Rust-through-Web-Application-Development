@@ -26,16 +26,16 @@ impl Fraction {
 impl Add for Fraction {
     type Output = Self;
     fn add(self, rhs: Self) -> Self::Output {
-        // // お互いの分母を書けて最大公約数で割ることで分母の最小公倍数を求める
-        // let dlcm = self.1 * rhs.1 / Self::gcd(self.1, rhs.1);
-        // // 最小公倍数を分母で割った数で分子に掛ける
-        // let numerator = self.0 * (dlcm / self.1) + rhs.0 * (dlcm / rhs.1);
-        // Fraction::new(numerator, dlcm)
+        // お互いの分母を書けて最大公約数で割ることで分母の最小公倍数を求める
+        let dlcm = self.1 * rhs.1 / Self::gcd(self.1, rhs.1);
+        // 最小公倍数を分母で割った数で分子に掛ける
+        let n = self.0 * (dlcm / self.1) + rhs.0 * (dlcm / rhs.1);
+        Fraction::new(n, dlcm)
 
-        // どうせ約分するんだしこっちでよくない？
-        let denominator = self.1 * rhs.1;
-        let numerator = self.0 * rhs.1 + rhs.0 * self.1;
-        Fraction::new(numerator, denominator)
+        // // どうせ約分するんだしこっちでよくない？
+        // let denominator = self.1 * rhs.1;
+        // let numerator = self.0 * rhs.1 + rhs.0 * self.1;
+        // Fraction::new(numerator, denominator)
     }
 }
 
