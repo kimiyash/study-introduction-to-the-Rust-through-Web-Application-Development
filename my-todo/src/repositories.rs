@@ -1,7 +1,8 @@
+use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
-    sync::{Arc, RwLock},
+    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 use thiserror::Error;
 
@@ -28,7 +29,7 @@ pub struct Todo {
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct CreateTodo {
-    test: String,
+    text: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -60,6 +61,14 @@ impl TodoRepositoryForMemory {
             store: Arc::default(),
         }
     }
+
+    fn write_store_ref(&self) -> RwLockWriteGuard<TodoDatas> {
+        self.store.write().unwrap()
+    }
+
+    fn read_store_ref(&self) -> RwLockReadGuard<TodoDatas> {
+        self.store.read().unwrap()
+    }
 }
 
 impl Default for TodoRepositoryForMemory {
@@ -70,22 +79,41 @@ impl Default for TodoRepositoryForMemory {
 
 impl TodoRepository for TodoRepositoryForMemory {
     fn create(&self, payload: CreateTodo) -> Todo {
-        todo!();
+        let mut store = self.write_store_ref();
+        let id = (store.len() + 1) as i32;
+        let todo = Todo::new(id, payload.text.clone());
+        store.insert(id, todo.clone());
+        todo
     }
 
     fn find(&self, id: i32) -> Option<Todo> {
-        todo!();
+        self.read_store_ref().get(&id).cloned()
     }
 
     fn all(&self) -> Vec<Todo> {
-        todo!();
+        Vec::from_iter(self.read_store_ref().values().cloned())
     }
 
     fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<Todo> {
-        todo!();
+        let mut store = self.write_store_ref();
+        let mut todo = store.get(&id).context(RepositoryError::NotFound(id))?.clone();
+        if let Some(text) = payload.text {
+            todo.text = text;
+        }
+        if let Some(completed) = payload.completed {
+            todo.completed = completed;
+        }
+        store.insert(todo.id, todo.clone());
+        Ok(todo)
     }
 
     fn delete(&self, id: i32) -> anyhow::Result<()> {
-        todo!();
+        self.write_store_ref().remove(&id).context(RepositoryError::NotFound(id))?;
+        Ok(())
     }
+}
+
+#[cfg(test)]
+mod tests {
+    
 }
