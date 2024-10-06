@@ -4,9 +4,10 @@ use axum::{
     response::IntoResponse,
     Json,
 };
+use serde::ser::Impossible;
 use std::sync::Arc;
 
-use crate::repositories::{self, CreateTodo, UpdateTodo, TodoRepository};
+use crate::repositories::{CreateTodo, TodoRepository, UpdateTodo};
 
 pub async fn create_todo<T: TodoRepository>(
     Json(payload): Json<CreateTodo>,
@@ -17,32 +18,38 @@ pub async fn create_todo<T: TodoRepository>(
     (StatusCode::CREATED, Json(todo))
 }
 
-pub async fn find_todo<T: TodoRepository> (
-    id: Path<i32>,
+pub async fn find_todo<T: TodoRepository>(
+    Path(id): Path<i32>,
     Extension(repository): Extension<Arc<T>>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    todo!();
-    Ok(StatusCode::OK)
+    let todo = repository.find(id).ok_or(StatusCode::NOT_FOUND)?;
+    Ok((StatusCode::OK, Json(todo)))
 }
 
-pub async fn all_todo<T: TodoRepository> (
+pub async fn all_todo<T: TodoRepository>(
     Extension(repository): Extension<Arc<T>>,
-) -> StatusCode {
-    todo!();
+) -> impl IntoResponse {
+    let todos = repository.all();
+    (StatusCode::OK, Json(todos))
 }
 
-pub fn update_todo<T: TodoRepository> (
-    id: Path<i32>,
+pub async fn update_todo<T: TodoRepository>(
+    Path(id): Path<i32>,
     Json(payload): Json<UpdateTodo>,
-    Extension(repository): Extension<Arc<T>>
+    Extension(repository): Extension<Arc<T>>,
 ) -> Result<impl IntoResponse, StatusCode> {
-    todo!();
-    Ok(StatusCode::OK)
+    let todo = repository
+        .update(id, payload)
+        .or(Err(StatusCode::NOT_FOUND))?;
+    Ok((StatusCode::OK, Json(todo)))
 }
 
-pub fn delete_todo<T: TodoRepository> (
-    id: Path<i32>,
-    Extension(resistory): Extension<Arc<T>>
+pub async fn delete_todo<T: TodoRepository>(
+    Path(id): Path<i32>,
+    Extension(repository): Extension<Arc<T>>,
 ) -> StatusCode {
-    todo!();
+    repository
+        .delete(id)
+        .map(|_| StatusCode::NO_CONTENT)
+        .unwrap_or(StatusCode::NOT_FOUND)
 }

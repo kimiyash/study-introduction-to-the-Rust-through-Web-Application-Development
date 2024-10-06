@@ -32,6 +32,12 @@ pub struct CreateTodo {
     text: String,
 }
 
+impl CreateTodo {
+    pub fn new(text: String) -> Self {
+        Self { text }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
 pub struct UpdateTodo {
     text: Option<String>,
