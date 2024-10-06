@@ -32,6 +32,7 @@ pub struct CreateTodo {
     text: String,
 }
 
+#[cfg(test)]
 impl CreateTodo {
     pub fn new(text: String) -> Self {
         Self { text }

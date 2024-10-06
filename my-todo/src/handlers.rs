@@ -4,7 +4,6 @@ use axum::{
     response::IntoResponse,
     Json,
 };
-use serde::ser::Impossible;
 use std::sync::Arc;
 
 use crate::repositories::{CreateTodo, TodoRepository, UpdateTodo};
