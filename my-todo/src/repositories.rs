@@ -1,11 +1,6 @@
-use anyhow::Context;
 use axum::async_trait;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
-use std::{
-    collections::HashMap,
-    sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
-};
 use thiserror::Error;
 use validator::Validate;
 
@@ -38,13 +33,6 @@ pub struct CreateTodo {
     text: String,
 }
 
-#[cfg(test)]
-impl CreateTodo {
-    pub fn new(text: String) -> Self {
-        Self { text }
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Validate)]
 pub struct UpdateTodo {
     #[validate(length(min = 1, message = "Can not be Empty"))]
@@ -60,82 +48,6 @@ impl Todo {
             text,
             completed: false,
         }
-    }
-}
-
-type TodoDatas = HashMap<i32, Todo>;
-
-#[derive(Debug, Clone)]
-pub struct TodoRepositoryForMemory {
-    store: Arc<RwLock<TodoDatas>>,
-}
-
-impl TodoRepositoryForMemory {
-    pub fn new() -> Self {
-        TodoRepositoryForMemory {
-            store: Arc::default(),
-        }
-    }
-
-    fn write_store_ref(&self) -> RwLockWriteGuard<TodoDatas> {
-        self.store.write().unwrap()
-    }
-
-    fn read_store_ref(&self) -> RwLockReadGuard<TodoDatas> {
-        self.store.read().unwrap()
-    }
-}
-
-impl Default for TodoRepositoryForMemory {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-#[async_trait]
-impl TodoRepository for TodoRepositoryForMemory {
-    async fn create(&self, payload: CreateTodo) -> anyhow::Result<Todo> {
-        let mut store = self.write_store_ref();
-        let id = (store.len() + 1) as i32;
-        let todo = Todo::new(id, payload.text.clone());
-        store.insert(id, todo.clone());
-        Ok(todo)
-    }
-
-    async fn find(&self, id: i32) -> anyhow::Result<Todo> {
-        let store = self.read_store_ref();
-        let todo = store
-            .get(&id)
-            .cloned()
-            .ok_or(RepositoryError::NotFound(id))?;
-        Ok(todo)
-    }
-
-    async fn all(&self) -> anyhow::Result<Vec<Todo>> {
-        Ok(Vec::from_iter(self.read_store_ref().values().cloned()))
-    }
-
-    async fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<Todo> {
-        let mut store = self.write_store_ref();
-        let mut todo = store
-            .get(&id)
-            .context(RepositoryError::NotFound(id))?
-            .clone();
-        if let Some(text) = payload.text {
-            todo.text = text;
-        }
-        if let Some(completed) = payload.completed {
-            todo.completed = completed;
-        }
-        store.insert(todo.id, todo.clone());
-        Ok(todo)
-    }
-
-    async fn delete(&self, id: i32) -> anyhow::Result<()> {
-        self.write_store_ref()
-            .remove(&id)
-            .context(RepositoryError::NotFound(id))?;
-        Ok(())
     }
 }
 
@@ -174,68 +86,156 @@ impl TodoRepository for TodoRepositoryForDb {
 }
 
 #[cfg(test)]
-mod tests {
-    use axum::async_trait;
+pub mod test_utils {
+    use super::*;
+    use anyhow::Context;
+    use std::{
+        collections::HashMap,
+        sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
+    };
 
-    use crate::repositories::UpdateTodo;
+    impl CreateTodo {
+        pub fn new(text: String) -> Self {
+            Self { text }
+        }
+    }
 
-    use super::{CreateTodo, Todo, TodoRepository, TodoRepositoryForMemory};
+    type TodoDatas = HashMap<i32, Todo>;
 
-    #[tokio::test]
-    async fn todo_crud_scenario() {
-        let repository = TodoRepositoryForMemory::new();
-        let id = 1;
-        let text = "test1".to_string();
-        let completed = false;
+    #[derive(Debug, Clone)]
+    pub struct TodoRepositoryForMemory {
+        store: Arc<RwLock<TodoDatas>>,
+    }
 
-        // create
-        let todo = CreateTodo { text: text.clone() };
-        repository.create(todo).await.expect("failed create todo");
+    impl TodoRepositoryForMemory {
+        pub fn new() -> Self {
+            TodoRepositoryForMemory {
+                store: Arc::default(),
+            }
+        }
 
-        // find
-        let todo = repository.find(id).await.unwrap();
-        assert_eq!(
-            Todo {
-                id,
-                text: text.clone(),
-                completed,
-            },
-            todo
-        );
+        fn write_store_ref(&self) -> RwLockWriteGuard<TodoDatas> {
+            self.store.write().unwrap()
+        }
 
-        // update
-        let text = "test2".to_string();
-        let completed = true;
-        assert_eq!(
-            Todo {
-                id,
-                text: text.clone(),
-                completed,
-            },
-            repository
-                .update(
+        fn read_store_ref(&self) -> RwLockReadGuard<TodoDatas> {
+            self.store.read().unwrap()
+        }
+    }
+
+    impl Default for TodoRepositoryForMemory {
+        fn default() -> Self {
+            Self::new()
+        }
+    }
+
+    #[async_trait]
+    impl TodoRepository for TodoRepositoryForMemory {
+        async fn create(&self, payload: CreateTodo) -> anyhow::Result<Todo> {
+            let mut store = self.write_store_ref();
+            let id = (store.len() + 1) as i32;
+            let todo = Todo::new(id, payload.text.clone());
+            store.insert(id, todo.clone());
+            Ok(todo)
+        }
+
+        async fn find(&self, id: i32) -> anyhow::Result<Todo> {
+            let store = self.read_store_ref();
+            let todo = store
+                .get(&id)
+                .cloned()
+                .ok_or(RepositoryError::NotFound(id))?;
+            Ok(todo)
+        }
+
+        async fn all(&self) -> anyhow::Result<Vec<Todo>> {
+            Ok(Vec::from_iter(self.read_store_ref().values().cloned()))
+        }
+
+        async fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<Todo> {
+            let mut store = self.write_store_ref();
+            let mut todo = store
+                .get(&id)
+                .context(RepositoryError::NotFound(id))?
+                .clone();
+            if let Some(text) = payload.text {
+                todo.text = text;
+            }
+            if let Some(completed) = payload.completed {
+                todo.completed = completed;
+            }
+            store.insert(todo.id, todo.clone());
+            Ok(todo)
+        }
+
+        async fn delete(&self, id: i32) -> anyhow::Result<()> {
+            self.write_store_ref()
+                .remove(&id)
+                .context(RepositoryError::NotFound(id))?;
+            Ok(())
+        }
+    }
+
+    mod test {
+        use super::{CreateTodo, Todo, TodoRepository, TodoRepositoryForMemory};
+        use crate::repositories::UpdateTodo;
+
+        #[tokio::test]
+        async fn todo_crud_scenario() {
+            let repository = TodoRepositoryForMemory::new();
+            let id = 1;
+            let text = "test1".to_string();
+            let completed = false;
+
+            // create
+            let todo = CreateTodo { text: text.clone() };
+            repository.create(todo).await.expect("failed create todo");
+
+            // find
+            let todo = repository.find(id).await.unwrap();
+            assert_eq!(
+                Todo {
                     id,
-                    UpdateTodo {
-                        text: Some(text.clone()),
-                        completed: Some(completed),
-                    }
-                )
-                .await
-                .unwrap()
-        );
+                    text: text.clone(),
+                    completed,
+                },
+                todo
+            );
 
-        // all
-        assert_eq!(
-            [Todo {
-                id,
-                text: text.clone(),
-                completed,
-            }]
-            .to_vec(),
-            repository.all().await.expect("faild get all todo")
-        );
+            // update
+            let text = "test2".to_string();
+            let completed = true;
+            assert_eq!(
+                Todo {
+                    id,
+                    text: text.clone(),
+                    completed,
+                },
+                repository
+                    .update(
+                        id,
+                        UpdateTodo {
+                            text: Some(text.clone()),
+                            completed: Some(completed),
+                        }
+                    )
+                    .await
+                    .unwrap()
+            );
 
-        // delete
-        assert!(repository.delete(id).await.is_ok());
+            // all
+            assert_eq!(
+                [Todo {
+                    id,
+                    text: text.clone(),
+                    completed,
+                }]
+                .to_vec(),
+                repository.all().await.expect("faild get all todo")
+            );
+
+            // delete
+            assert!(repository.delete(id).await.is_ok());
+        }
     }
 }
