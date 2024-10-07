@@ -7,18 +7,21 @@ use std::{
 use thiserror::Error;
 use validator::Validate;
 
+use axum::async_trait;
+
 #[derive(Debug, Error, PartialEq, Eq)]
 enum RepositoryError {
     #[error("Not Found, id is {0}")]
     NotFound(i32),
 }
 
+#[async_trait]
 pub trait TodoRepository: Clone + std::marker::Send + std::marker::Sync + 'static {
-    fn create(&self, payload: CreateTodo) -> Todo;
-    fn find(&self, id: i32) -> Option<Todo>;
-    fn all(&self) -> Vec<Todo>;
-    fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<Todo>;
-    fn delete(&self, id: i32) -> anyhow::Result<()>;
+    async fn create(&self, payload: CreateTodo) -> anyhow::Result<Todo>;
+    async fn find(&self, id: i32) -> anyhow::Result<Todo>;
+    async fn all(&self) -> anyhow::Result<Vec<Todo>>;
+    async fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<Todo>;
+    async fn delete(&self, id: i32) -> anyhow::Result<()>;
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
@@ -89,24 +92,30 @@ impl Default for TodoRepositoryForMemory {
     }
 }
 
+#[async_trait]
 impl TodoRepository for TodoRepositoryForMemory {
-    fn create(&self, payload: CreateTodo) -> Todo {
+    async fn create(&self, payload: CreateTodo) -> anyhow::Result<Todo> {
         let mut store = self.write_store_ref();
         let id = (store.len() + 1) as i32;
         let todo = Todo::new(id, payload.text.clone());
         store.insert(id, todo.clone());
-        todo
+        Ok(todo)
     }
 
-    fn find(&self, id: i32) -> Option<Todo> {
-        self.read_store_ref().get(&id).cloned()
+    async fn find(&self, id: i32) -> anyhow::Result<Todo> {
+        let store = self.read_store_ref();
+        let todo = store
+            .get(&id)
+            .cloned()
+            .ok_or(RepositoryError::NotFound(id))?;
+        Ok(todo)
     }
 
-    fn all(&self) -> Vec<Todo> {
-        Vec::from_iter(self.read_store_ref().values().cloned())
+    async fn all(&self) -> anyhow::Result<Vec<Todo>> {
+        Ok(Vec::from_iter(self.read_store_ref().values().cloned()))
     }
 
-    fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<Todo> {
+    async fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<Todo> {
         let mut store = self.write_store_ref();
         let mut todo = store
             .get(&id)
@@ -122,7 +131,7 @@ impl TodoRepository for TodoRepositoryForMemory {
         Ok(todo)
     }
 
-    fn delete(&self, id: i32) -> anyhow::Result<()> {
+    async fn delete(&self, id: i32) -> anyhow::Result<()> {
         self.write_store_ref()
             .remove(&id)
             .context(RepositoryError::NotFound(id))?;
@@ -136,8 +145,8 @@ mod tests {
 
     use super::{CreateTodo, Todo, TodoRepository, TodoRepositoryForMemory};
 
-    #[test]
-    fn todo_crud_scenario() {
+    #[tokio::test]
+    async fn todo_crud_scenario() {
         let repository = TodoRepositoryForMemory::new();
         let id = 1;
         let text = "test1".to_string();
@@ -145,10 +154,10 @@ mod tests {
 
         // create
         let todo = CreateTodo { text: text.clone() };
-        repository.create(todo);
+        repository.create(todo).await.expect("failed create todo");
 
         // find
-        let todo = repository.find(id).unwrap();
+        let todo = repository.find(id).await.unwrap();
         assert_eq!(
             Todo {
                 id,
@@ -175,6 +184,7 @@ mod tests {
                         completed: Some(completed),
                     }
                 )
+                .await
                 .unwrap()
         );
 
@@ -186,10 +196,10 @@ mod tests {
                 completed,
             }]
             .to_vec(),
-            repository.all()
+            repository.all().await.expect("faild get all todo")
         );
 
         // delete
-        assert!(repository.delete(id).is_ok());
+        assert!(repository.delete(id).await.is_ok());
     }
 }
