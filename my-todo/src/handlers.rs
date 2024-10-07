@@ -1,5 +1,9 @@
 use axum::{
-    async_trait, extract::{Extension, FromRequest, Path, RequestParts}, http::StatusCode, response::IntoResponse, BoxError, Json
+    async_trait,
+    extract::{Extension, FromRequest, Path, RequestParts},
+    http::StatusCode,
+    response::IntoResponse,
+    BoxError, Json,
 };
 use serde::de::DeserializeOwned;
 use std::sync::Arc;
@@ -35,7 +39,7 @@ where
 
 pub async fn create_todo<T: TodoRepository>(
     ValidateJson(payload): ValidateJson<CreateTodo>,
-    Extension(repository): Extension<Arc<T>>, 
+    Extension(repository): Extension<Arc<T>>,
 ) -> impl IntoResponse {
     let todo = repository.create(payload);
 

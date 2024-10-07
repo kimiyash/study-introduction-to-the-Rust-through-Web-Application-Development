@@ -1,11 +1,11 @@
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
-use validator::Validate;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 use thiserror::Error;
+use validator::Validate;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 enum RepositoryError {
