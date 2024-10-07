@@ -9,7 +9,12 @@ down:
 login:
 	docker compose exec database bash
 
+db-login:
+	docker compose exec database psql -U admin todos
+
 dev:
+	sqlx db create
+	sqlx migrate run
 	cargo watch -x run
 
 test:
