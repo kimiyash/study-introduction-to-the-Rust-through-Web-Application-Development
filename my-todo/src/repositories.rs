@@ -1,13 +1,13 @@
 use anyhow::Context;
+use axum::async_trait;
 use serde::{Deserialize, Serialize};
+use sqlx::PgPool;
 use std::{
     collections::HashMap,
     sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard},
 };
 use thiserror::Error;
 use validator::Validate;
-
-use axum::async_trait;
 
 #[derive(Debug, Error, PartialEq, Eq)]
 enum RepositoryError {
@@ -139,8 +139,44 @@ impl TodoRepository for TodoRepositoryForMemory {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct TodoRepositoryForDb {
+    pool: PgPool,
+}
+
+impl TodoRepositoryForDb {
+    pub fn new(pool: PgPool) -> Self {
+        TodoRepositoryForDb { pool }
+    }
+}
+
+#[async_trait]
+impl TodoRepository for TodoRepositoryForDb {
+    async fn create(&self, _payload: CreateTodo) -> anyhow::Result<Todo> {
+        todo!()
+    }
+
+    async fn find(&self, _id: i32) -> anyhow::Result<Todo> {
+        todo!()
+    }
+
+    async fn all(&self) -> anyhow::Result<Vec<Todo>> {
+        todo!()
+    }
+
+    async fn update(&self, _id: i32, _payload: UpdateTodo) -> anyhow::Result<Todo> {
+        todo!()
+    }
+
+    async fn delete(&self, _id: i32) -> anyhow::Result<()> {
+        todo!()
+    }
+}
+
 #[cfg(test)]
 mod tests {
+    use axum::async_trait;
+
     use crate::repositories::UpdateTodo;
 
     use super::{CreateTodo, Todo, TodoRepository, TodoRepositoryForMemory};
