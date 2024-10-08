@@ -1,8 +1,9 @@
 import { FC, useState } from 'react'
 import 'modern-css-reset'
 import { ThemeProvider, createTheme } from '@mui/material/styles'
-import { Box, Typography } from '@mui/material'
-import { NewTodoPayload } from './types/todo'
+import { Box, Stack, Typography } from '@mui/material'
+import { NewTodoPayload, Todo } from './types/todo'
+import TodoList from './components/TodoList'
 import TodoForm from './components/TodoForm'
 
 const TodoApp: FC = () => {
@@ -21,6 +22,20 @@ const TodoApp: FC = () => {
     ])
   }
 
+  const onUpdate = (updateTodo: Todo) => {
+    setTodos(
+      todos.map((todo) => {
+        if (todo.id === updateTodo.id) {
+          return {
+            ...todo,       // 元の `todo` のプロパティを展開
+            ...updateTodo, // `updateTodo` のプロパティで上書き（更新）
+          }
+        }
+        return todo
+      })
+    )
+  }
+
   return (
     <>
       <Box
@@ -34,7 +49,7 @@ const TodoApp: FC = () => {
           p: 2,
           width: '100%',
           height: 80,
-          zIndex: 3,          
+          zIndex: 3,
         }}
       >
         <Typography variant='h1'>Todo App</Typography>
@@ -43,12 +58,15 @@ const TodoApp: FC = () => {
         sx={{
           display: 'flex',
           justifyContent: 'center',
-          p: 5,
-          mt: 10,
+          p: 1,
+          mt: 3,
         }}
       >
         <Box maxWidth={700} width="100%">
-          <TodoForm onSubmit={onSubmit} />
+          <Stack spacing={5}>
+            <TodoForm onSubmit={onSubmit} />
+            <TodoList todos={todos} onUpdate={onUpdate} />
+          </Stack>
         </Box>
       </Box>
     </>

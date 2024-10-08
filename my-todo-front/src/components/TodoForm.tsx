@@ -2,11 +2,11 @@ import { FC, useState } from 'react'
 import { NewTodoPayload } from '../types/todo'
 import { Box, Button, TextField, Paper, Grid } from '@mui/material'
 
-type Prosp = {
+type Props = {
     onSubmit: (newTodo: NewTodoPayload) => void
 }
 
-const TodoForm: FC<Prosp> = ({ onSubmit }) => {
+const TodoForm: FC<Props> = ({ onSubmit }) => {
     const [editText, setEditText] = useState('')
 
     const addTodoHandler = async () => {
