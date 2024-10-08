@@ -168,12 +168,12 @@ pub mod test_utils {
         async fn create(&self, name: String) -> anyhow::Result<Label> {
             let mut store = self.write_store_ref();
             let id = (store.len() + 1) as i32;
-            let todo = Label {
+            let label = Label {
                 id,
                 name: name.clone(),
             };
-            store.insert(id, todo.clone());
-            Ok(todo)
+            store.insert(id, label.clone());
+            Ok(label)
         }
 
         async fn all(&self) -> anyhow::Result<Vec<Label>> {
