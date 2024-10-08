@@ -1,9 +1,11 @@
+use hyper::header::CONTENT_TYPE;
 mod handlers;
 mod repositories;
 use crate::handlers::{all_todo, create_todo, delete_todo, find_todo, update_todo};
 use crate::repositories::{TodoRepository, TodoRepositoryForDb};
 use dotenv::dotenv;
 use sqlx::PgPool;
+use tower_http::cors::{Any, CorsLayer, Origin};
 
 use axum::{
     extract::Extension,
@@ -49,6 +51,12 @@ fn create_app<T: TodoRepository>(repository: T) -> Router {
                 .patch(update_todo::<T>),
         )
         .layer(Extension(Arc::new(repository)))
+        .layer(
+            CorsLayer::new()
+                .allow_origin(Origin::exact("http://localhost:3001".parse().unwrap()))
+                .allow_methods(Any)
+                .allow_headers(vec![CONTENT_TYPE]),
+        )
 }
 
 async fn root() -> &'static str {
