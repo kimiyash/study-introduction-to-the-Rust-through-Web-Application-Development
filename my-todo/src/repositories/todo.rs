@@ -3,23 +3,56 @@ use indoc::indoc;
 use serde::{Deserialize, Serialize};
 use sqlx::{FromRow, PgPool};
 use validator::Validate;
+use crate::repositories::label::Label;
 
 use super::RepositoryError;
 
 #[async_trait]
 pub trait TodoRepository: Clone + std::marker::Send + std::marker::Sync + 'static {
-    async fn create(&self, payload: CreateTodo) -> anyhow::Result<Todo>;
-    async fn find(&self, id: i32) -> anyhow::Result<Todo>;
-    async fn all(&self) -> anyhow::Result<Vec<Todo>>;
-    async fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<Todo>;
+    async fn create(&self, payload: CreateTodo) -> anyhow::Result<TodoEntity>;
+    async fn find(&self, id: i32) -> anyhow::Result<TodoEntity>;
+    async fn all(&self) -> anyhow::Result<Vec<TodoEntity>>;
+    async fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<TodoEntity>;
     async fn delete(&self, id: i32) -> anyhow::Result<()>;
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, FromRow)]
-pub struct Todo {
+#[derive(Debug, Clone, PartialEq, Eq, FromRow)]
+pub struct TodoWithLabelFromRow {
     id: i32,
     text: String,
     completed: bool,
+    // label_id, Option<i32>
+    // label_name, Option<String>
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq)]
+pub struct TodoEntity {
+    pub id: i32,
+    pub text: String,
+    pub completed: bool,
+    pub labels: Vec<Label>,
+}
+
+fn fold_entities(row: Vec<TodoWithLabelFromRow>) -> Vec<TodoEntity> {
+    row.iter()
+        .fold(vec![], |mut accm: Vec<TodoEntity>, current| {
+            // todo 同一id の todo を畳み込み
+            // todo 同一id の場合、Labelを作成し `labels` へ push
+            accm.push(TodoEntity {
+                id: current.id,
+                text: current.text.clone(),
+                completed: current.completed,
+                labels: vec![]
+            });
+            accm
+        })
+}
+
+fn fold_entity(row: TodoWithLabelFromRow) -> TodoEntity {
+    let todo_entities = fold_entities(vec![row]);
+    let todo = todo_entities.first().expect("expect 1 todo");
+
+    todo.clone()
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone, PartialEq, Eq, Validate)]
@@ -38,12 +71,13 @@ pub struct UpdateTodo {
 }
 
 #[cfg(test)]
-impl Todo {
+impl TodoEntity {
     pub fn new(id: i32, text: String) -> Self {
         Self {
             id,
             text,
             completed: false,
+            labels: vec![],
         }
     }
 }
@@ -61,8 +95,8 @@ impl TodoRepositoryForDb {
 
 #[async_trait]
 impl TodoRepository for TodoRepositoryForDb {
-    async fn create(&self, payload: CreateTodo) -> anyhow::Result<Todo> {
-        let todo = sqlx::query_as::<_, Todo>(indoc!(
+    async fn create(&self, payload: CreateTodo) -> anyhow::Result<TodoEntity> {
+        let todo = sqlx::query_as::<_, TodoWithLabelFromRow>(indoc!(
             r#"
                 insert into todos (text, completed) values ($1, false)
                 returning *
@@ -72,11 +106,11 @@ impl TodoRepository for TodoRepositoryForDb {
         .fetch_one(&self.pool)
         .await?;
 
-        Ok(todo)
+        Ok(fold_entity(todo))
     }
 
-    async fn find(&self, id: i32) -> anyhow::Result<Todo> {
-        let todo = sqlx::query_as::<_, Todo>(indoc!(
+    async fn find(&self, id: i32) -> anyhow::Result<TodoEntity> {
+        let todo = sqlx::query_as::<_, TodoWithLabelFromRow>(indoc!(
             r#"
                 select * from todos where id = $1
             "#,
@@ -89,11 +123,11 @@ impl TodoRepository for TodoRepositoryForDb {
             _ => RepositoryError::Unexpected(e.to_string()),
         })?;
 
-        Ok(todo)
+        Ok(fold_entity(todo))
     }
 
-    async fn all(&self) -> anyhow::Result<Vec<Todo>> {
-        let todos = sqlx::query_as::<_, Todo>(indoc!(
+    async fn all(&self) -> anyhow::Result<Vec<TodoEntity>> {
+        let todos = sqlx::query_as::<_, TodoWithLabelFromRow>(indoc!(
             r#"
                 select * from todos order by id desc
             "#,
@@ -101,12 +135,12 @@ impl TodoRepository for TodoRepositoryForDb {
         .fetch_all(&self.pool)
         .await?;
 
-        Ok(todos)
+        Ok(fold_entities(todos))
     }
 
-    async fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<Todo> {
+    async fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<TodoEntity> {
         let old_todo = self.find(id).await?;
-        let todo = sqlx::query_as::<_, Todo>(indoc!(
+        let todo = sqlx::query_as::<_, TodoWithLabelFromRow>(indoc!(
             r#"
                 update todos set text = $1, completed = $2 where id = $3
                 returning *
@@ -118,7 +152,7 @@ impl TodoRepository for TodoRepositoryForDb {
         .fetch_one(&self.pool)
         .await?;
 
-        Ok(todo)
+        Ok(fold_entity(todo))
     }
 
     async fn delete(&self, id: i32) -> anyhow::Result<()> {
@@ -230,7 +264,7 @@ pub mod test_utils {
         }
     }
 
-    type TodoDatas = HashMap<i32, Todo>;
+    type TodoDatas = HashMap<i32, TodoEntity>;
 
     #[derive(Debug, Clone)]
     pub struct TodoRepositoryForMemory {
@@ -261,28 +295,28 @@ pub mod test_utils {
 
     #[async_trait]
     impl TodoRepository for TodoRepositoryForMemory {
-        async fn create(&self, payload: CreateTodo) -> anyhow::Result<Todo> {
+        async fn create(&self, payload: CreateTodo) -> anyhow::Result<TodoEntity> {
             let mut store = self.write_store_ref();
             let id = (store.len() + 1) as i32;
-            let todo = Todo::new(id, payload.text.clone());
+            let todo = TodoEntity::new(id, payload.text.clone());
             store.insert(id, todo.clone());
             Ok(todo)
         }
 
-        async fn find(&self, id: i32) -> anyhow::Result<Todo> {
+        async fn find(&self, id: i32) -> anyhow::Result<TodoEntity> {
             let store = self.read_store_ref();
             let todo = store
                 .get(&id)
                 .cloned()
-                .ok_or(RepositoryError::NotFound(id))?;
+                .ok_or(RepositoryError::NotFound(id))?; 
             Ok(todo)
         }
 
-        async fn all(&self) -> anyhow::Result<Vec<Todo>> {
+        async fn all(&self) -> anyhow::Result<Vec<TodoEntity>> {
             Ok(Vec::from_iter(self.read_store_ref().values().cloned()))
         }
 
-        async fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<Todo> {
+        async fn update(&self, id: i32, payload: UpdateTodo) -> anyhow::Result<TodoEntity> {
             let mut store = self.write_store_ref();
             let mut todo = store
                 .get(&id)
@@ -307,7 +341,7 @@ pub mod test_utils {
     }
 
     mod test {
-        use super::{CreateTodo, Todo, TodoRepository, TodoRepositoryForMemory};
+        use super::{CreateTodo, TodoEntity, TodoRepository, TodoRepositoryForMemory};
         use crate::repositories::todo::UpdateTodo;
 
         #[tokio::test]
@@ -324,10 +358,11 @@ pub mod test_utils {
             // find
             let todo = repository.find(id).await.unwrap();
             assert_eq!(
-                Todo {
+                TodoEntity {
                     id,
                     text: text.clone(),
                     completed,
+                    labels: vec![],
                 },
                 todo
             );
@@ -336,10 +371,11 @@ pub mod test_utils {
             let text = "test2".to_string();
             let completed = true;
             assert_eq!(
-                Todo {
+                TodoEntity {
                     id,
                     text: text.clone(),
                     completed,
+                    labels: vec![],
                 },
                 repository
                     .update(
@@ -355,10 +391,11 @@ pub mod test_utils {
 
             // all
             assert_eq!(
-                [Todo {
+                [TodoEntity {
                     id,
                     text: text.clone(),
                     completed,
+                    labels: vec![],
                 }]
                 .to_vec(),
                 repository.all().await.expect("faild get all todo")
