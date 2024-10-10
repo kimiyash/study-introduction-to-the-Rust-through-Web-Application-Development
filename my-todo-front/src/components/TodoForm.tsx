@@ -55,7 +55,7 @@ const TodoForm: FC<Props> = ({ onSubmit, labels }) => {
                             ))}
                         </Stack>
                     </Grid>
-                    <Grid item xs={3} xl={7}>
+                    <Grid item xs={3} xl={3}>
                         <Button
                             onClick={() => setOpenLabelModal(true)}
                             fullWidth
@@ -64,8 +64,8 @@ const TodoForm: FC<Props> = ({ onSubmit, labels }) => {
                             select label
                         </Button>
                     </Grid>
-                    <Grid item xs={6} />
-                    <Grid item xs={3}>
+                    <Grid item xs={6} xl={6}/>
+                    <Grid item xs={3} xl={3}>
                         <Button onClick={addTodoHandler} fullWidth>
                             add todo
                         </Button>

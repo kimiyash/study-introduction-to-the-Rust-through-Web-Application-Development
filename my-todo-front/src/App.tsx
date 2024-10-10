@@ -74,11 +74,11 @@ const TodoApp: FC = () => {
     <>
       <Box
         sx={{
-          backgroudColor: 'white',
+          backgroundColor: 'white',
           borderBottom: '1px solid gray',
           display: 'flex',
           alignItems: 'center',
-          postiton: 'flxed',
+          position: 'flxed',
           top: 0,
           p: 2,
           width: '100%',
@@ -96,7 +96,7 @@ const TodoApp: FC = () => {
           height: 'calc(100% - 80px)',
           width: 200,
           zIndex: 2,
-          left: 0
+          left: 0,
         }}
       >
         <SideNav
@@ -112,7 +112,8 @@ const TodoApp: FC = () => {
           display: 'flex',
           justifyContent: 'center',
           p: 1,
-          mt: 3,
+          mt: 1,
+          ml: 25,
         }}
       >
         <Box maxWidth={700} width="100%">
